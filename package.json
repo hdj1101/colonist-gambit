@@ -1,0 +1,21 @@
+{
+  "name": "colonist-gambit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modular multiplayer Catan implementation with real-time server and canvas client",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "esbuild@0.25.12": true
+  }
+}
