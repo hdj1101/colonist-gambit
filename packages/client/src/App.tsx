@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSocket } from './hooks/useSocket.js';
 import { BoardRenderer } from './canvas/BoardRenderer.js';
 import { ResourceBar } from './components/ResourceBar.js';
+import { DiscardModal } from './components/DiscardModal.js';
+import { StealModal } from './components/StealModal.js';
 import { Lobby } from './components/Lobby.js';
-import type { PlayerColor, VertexId, EdgeId, HexId } from '@colonist-gambit/shared';
+import type { PlayerColor, VertexId, EdgeId, HexId, ResourceCount } from '@colonist-gambit/shared';
 import {
   isValidSettlementPlacement,
   isValidRoadPlacement,
@@ -26,6 +28,13 @@ export const App: React.FC = () => {
   const [interactionMode, setInteractionMode] = useState<
     'NONE' | 'PLACE_SETTLEMENT' | 'PLACE_ROAD' | 'UPGRADE_CITY' | 'MOVE_ROBBER'
   >('NONE');
+  const [isDiscardModalOpen, setIsDiscardModalOpen] = useState(true);
+
+  useEffect(() => {
+    if (gameState?.phase === 'DISCARD_PHASE') {
+      setIsDiscardModalOpen(true);
+    }
+  }, [gameState?.phase]);
 
   const handleJoin = async (roomId: string, name: string, color: PlayerColor) => {
     await joinRoom(roomId, myPlayerId, name, color);
@@ -140,11 +149,33 @@ export const App: React.FC = () => {
         : {}),
     };
 
+    const pendingDiscards = gameState.turn?.pendingDiscards ?? {};
+    const myPendingDiscardCount = pendingDiscards[myPlayerId] ?? 0;
+
+    const getPlayerName = (pId: string) => {
+      if (pId === myPlayerId) return 'You';
+      const opp = gameState.opponents?.find((o) => o.id === pId);
+      if (opp?.name) return opp.name;
+      const lobbyPlayer = lobbyState?.players?.find((p) => p.id === pId);
+      if (lobbyPlayer?.name) return lobbyPlayer.name;
+      return pId;
+    };
+
+    const handleDiscardCards = (cards: Partial<ResourceCount>) => {
+      dispatchAction({ type: 'DISCARD_CARDS', cards });
+    };
+
+    const handleStealResource = (targetPlayerId: string) => {
+      dispatchAction({ type: 'STEAL_RESOURCE', targetPlayerId });
+    };
+
     console.log('[Colonist Gambit Debug]', {
       myPlayerId,
       me: gameState.me,
       opponents: gameState.opponents,
       playerColors,
+      pendingDiscards,
+      myPendingDiscardCount,
     });
 
     return (
@@ -176,6 +207,25 @@ export const App: React.FC = () => {
 
           {/* Dice & Turn Controls */}
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {gameState.phase === 'DISCARD_PHASE' && (
+              <button
+                onClick={() => setIsDiscardModalOpen(true)}
+                style={{
+                  padding: '8px 16px',
+                  background: myPendingDiscardCount > 0 ? '#ecc94b' : '#4a5568',
+                  color: myPendingDiscardCount > 0 ? '#1a202c' : '#fff',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                {myPendingDiscardCount > 0
+                  ? `Discard Cards (${myPendingDiscardCount})`
+                  : 'Discard Status'}
+              </button>
+            )}
+
             {gameState.phase === 'TURN_START' && isMyTurn && (
               <>
                 {/* Pre-Roll Knight (if owned) */}
@@ -229,6 +279,80 @@ export const App: React.FC = () => {
             )}
           </div>
         </header>
+
+        {/* Phase Announcement Banners */}
+        {gameState.phase === 'DISCARD_PHASE' && (
+          <div
+            style={{
+              padding: '10px 24px',
+              background: myPendingDiscardCount > 0 ? '#744210' : '#2d3748',
+              color: myPendingDiscardCount > 0 ? '#fefcbf' : '#e2e8f0',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '16px',
+              fontSize: '14px',
+              borderBottom: '1px solid #4a5568',
+            }}
+          >
+            <span>
+              🎲 <strong>Seven Rolled! Discard Phase:</strong>{' '}
+              {myPendingDiscardCount > 0
+                ? `You have over 7 cards and must discard ${myPendingDiscardCount} cards.`
+                : 'Waiting for players holding over 7 cards to discard.'}
+            </span>
+            <button
+              onClick={() => setIsDiscardModalOpen(true)}
+              style={{
+                padding: '4px 12px',
+                background: myPendingDiscardCount > 0 ? '#ecc94b' : '#4a5568',
+                color: myPendingDiscardCount > 0 ? '#1a202c' : '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontSize: '12px',
+              }}
+            >
+              {myPendingDiscardCount > 0 ? 'Discard Cards' : 'View Status'}
+            </button>
+          </div>
+        )}
+
+        {gameState.phase === 'ROBBER_MOVE' && (
+          <div
+            style={{
+              padding: '10px 24px',
+              background: isMyTurn ? '#2c5282' : '#2d3748',
+              color: isMyTurn ? '#ebf8ff' : '#cbd5e0',
+              textAlign: 'center',
+              fontSize: '14px',
+              fontWeight: 500,
+              borderBottom: '1px solid #4a5568',
+            }}
+          >
+            {isMyTurn ? (
+              <span>🥷 <strong>Robber Move:</strong> Click any valid hex on the board to move the Robber.</span>
+            ) : (
+              <span>⏳ Waiting for <strong>{activePlayerName}</strong> to move the Robber...</span>
+            )}
+          </div>
+        )}
+
+        {gameState.phase === 'ROBBER_STEAL' && !isMyTurn && (
+          <div
+            style={{
+              padding: '10px 24px',
+              background: '#2d3748',
+              color: '#cbd5e0',
+              textAlign: 'center',
+              fontSize: '14px',
+              borderBottom: '1px solid #4a5568',
+            }}
+          >
+            <span>⏳ Waiting for <strong>{activePlayerName}</strong> to steal a resource card...</span>
+          </div>
+        )}
 
         {/* Error Notification */}
         {lastError && (
@@ -319,6 +443,41 @@ export const App: React.FC = () => {
         >
           <ResourceBar resources={gameState.me.resources} />
 
+          {gameState.phase === 'DISCARD_PHASE' && (
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {myPendingDiscardCount > 0 ? (
+                <button
+                  onClick={() => setIsDiscardModalOpen(true)}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#ecc94b',
+                    color: '#1a202c',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Discard {myPendingDiscardCount} Cards
+                </button>
+              ) : (
+                <span style={{ fontSize: '13px', color: '#a0aec0' }}>
+                  ⏳ Waiting for other players to discard...
+                </span>
+              )}
+            </div>
+          )}
+
+          {gameState.phase === 'ROBBER_MOVE' && (
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', color: isMyTurn ? '#ecc94b' : '#a0aec0' }}>
+                {isMyTurn
+                  ? 'Click any valid hex to place the robber'
+                  : `Waiting for ${activePlayerName} to place the robber...`}
+              </span>
+            </div>
+          )}
+
           {gameState.phase === 'ACTION_PHASE' && isMyTurn && (
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -376,6 +535,35 @@ export const App: React.FC = () => {
             </div>
           )}
         </footer>
+
+        {/* Discard Phase Modal */}
+        {gameState.phase === 'DISCARD_PHASE' && (
+          <DiscardModal
+            isOpen={isDiscardModalOpen}
+            requiredCount={myPendingDiscardCount}
+            currentResources={gameState.me.resources}
+            pendingDiscards={pendingDiscards}
+            opponents={gameState.opponents}
+            playerColors={playerColors}
+            getPlayerName={getPlayerName}
+            onDiscard={handleDiscardCards}
+            onClose={() => setIsDiscardModalOpen(false)}
+          />
+        )}
+
+        {/* Robber Steal Phase Modal */}
+        {gameState.phase === 'ROBBER_STEAL' && (
+          <StealModal
+            isOpen={true}
+            isMyTurn={isMyTurn}
+            activePlayerName={activePlayerName}
+            eligibleTargets={gameState.turn?.eligibleStealTargets ?? []}
+            opponents={gameState.opponents}
+            playerColors={playerColors}
+            getPlayerName={getPlayerName}
+            onSteal={handleStealResource}
+          />
+        )}
       </div>
     );
   }
