@@ -126,9 +126,26 @@ export const App: React.FC = () => {
     };
 
     const playerColors: Record<string, string> = {
-      [gameState.me.id]: gameState.me.color,
-      ...Object.fromEntries(gameState.opponents.map((o) => [o.id, o.color])),
+      ...(lobbyState?.players
+        ? Object.fromEntries(lobbyState.players.map((p) => [p.id, p.color]))
+        : {}),
+      ...((gameState as any).players
+        ? Object.fromEntries(
+            Object.values((gameState as any).players).map((p: any) => [p.id, p.color])
+          )
+        : {}),
+      ...(gameState.me ? { [gameState.me.id]: gameState.me.color } : {}),
+      ...(Array.isArray(gameState.opponents)
+        ? Object.fromEntries(gameState.opponents.map((o) => [o.id, o.color]))
+        : {}),
     };
+
+    console.log('[Colonist Gambit Debug]', {
+      myPlayerId,
+      me: gameState.me,
+      opponents: gameState.opponents,
+      playerColors,
+    });
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#171923' }}>
@@ -145,9 +162,16 @@ export const App: React.FC = () => {
         >
           <div>
             <h2 style={{ fontSize: '18px', color: '#ecc94b' }}>Colonist Gambit</h2>
-            <span style={{ fontSize: '12px', color: '#a0aec0' }}>
-              Phase: {gameState.phase} | Active: {activePlayerName}
-            </span>
+            <div style={{ fontSize: '12px', color: '#a0aec0', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <span>Phase: {gameState.phase} | Active: {activePlayerName}</span>
+              <span style={{ color: '#63b3ed' }}>You: {myPlayerId}</span>
+              <span style={{ color: gameState.me?.color === 'white' ? '#edf2f7' : gameState.me?.color, fontWeight: 'bold' }}>
+                Color: {gameState.me?.color}
+              </span>
+              <span style={{ color: '#ecc94b' }}>
+                Colors Map: {JSON.stringify(playerColors)}
+              </span>
+            </div>
           </div>
 
           {/* Dice & Turn Controls */}
@@ -224,7 +248,52 @@ export const App: React.FC = () => {
         )}
 
         {/* Main Board View */}
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+        <div style={{ flex: 1, display: 'flex', position: 'relative', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+          {/* Debug Panel on Left Hand Side */}
+          <div
+            style={{
+              position: 'absolute',
+              left: '16px',
+              top: '16px',
+              zIndex: 10,
+              background: 'rgba(26, 32, 44, 0.92)',
+              border: '1px solid #4a5568',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              color: '#fff',
+              fontSize: '13px',
+              maxWidth: '260px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+            }}
+          >
+            <div style={{ fontWeight: 'bold', color: '#ecc94b', borderBottom: '1px solid #4a5568', paddingBottom: '4px' }}>
+              🛠️ Player Info (Debug)
+            </div>
+            <div>
+              <span style={{ color: '#a0aec0' }}>My ID: </span>
+              <code style={{ color: '#63b3ed' }}>{myPlayerId}</code>
+            </div>
+            <div>
+              <span style={{ color: '#a0aec0' }}>State ID: </span>
+              <code style={{ color: '#63b3ed' }}>{gameState.me?.id ?? 'N/A'}</code>
+            </div>
+            <div>
+              <span style={{ color: '#a0aec0' }}>My Color: </span>
+              <span style={{ fontWeight: 'bold', color: gameState.me?.color === 'white' ? '#edf2f7' : gameState.me?.color }}>
+                {gameState.me?.color ?? 'N/A'}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: '#a0aec0' }}>playerColors: </span>
+              <pre style={{ margin: '4px 0 0 0', fontSize: '11px', background: '#171923', padding: '6px', borderRadius: '4px', overflowX: 'auto' }}>
+                {JSON.stringify(playerColors, null, 2)}
+              </pre>
+            </div>
+          </div>
+
           <BoardRenderer
             board={gameState.board}
             playerColors={playerColors}

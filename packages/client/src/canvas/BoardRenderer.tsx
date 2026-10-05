@@ -52,10 +52,26 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
   onSelectEdge,
   onSelectHex,
 }) => {
-  const resolvePlayerColor = (playerId: string, defaultColor: string) => {
-    const colorKey = playerColors[playerId] ?? playerId;
-    return PLAYER_COLORS[colorKey] ?? colorKey ?? defaultColor;
+  console.log('[BoardRenderer Debug]', { playerColors, hexCount: Object.keys(board.hexes).length });
+
+  const getPlayerColor = (playerId?: string): string => {
+    if (!playerId) return '#cbd5e0';
+    // 1. Check playerColors map passed from parent (playerId -> colorName/hex)
+    const mapped = playerColors[playerId] || playerColors[playerId.toLowerCase()];
+    if (mapped) {
+      return PLAYER_COLORS[mapped.toLowerCase()] || mapped;
+    }
+    // 2. Check if playerId is itself a known color name ('red', 'blue', etc.)
+    if (PLAYER_COLORS[playerId.toLowerCase()]) {
+      return PLAYER_COLORS[playerId.toLowerCase()]!;
+    }
+    // 3. Raw CSS color (hex, rgb)
+    if (playerId.startsWith('#') || playerId.startsWith('rgb')) {
+      return playerId;
+    }
+    return '#cbd5e0';
   };
+
   return (
     <svg
       viewBox="0 0 840 720"
@@ -154,10 +170,10 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
                   y1={startY}
                   x2={endX}
                   y2={endY}
-                  stroke={resolvePlayerColor(road.playerId, '#ecc94b')}
+                  stroke={getPlayerColor(road.playerId)}
                   strokeWidth={7}
                   strokeLinecap="round"
-                  filter="url(#shadow)"
+                  style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,0.3))' }}
                 />
               )}
 
@@ -203,8 +219,11 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
 
           if (!building && !isSelectable) return null;
 
-          const buildingColor = building ? resolvePlayerColor(building.playerId, '#cbd5e0') : undefined;
-          const strokeColor = buildingColor === '#edf2f7' ? '#2d3748' : '#ffffff';
+          const playerColor = building ? getPlayerColor(building.playerId) : undefined;
+          const strokeColor =
+            playerColor === PLAYER_COLORS.white || playerColor === '#edf2f7' || playerColor === 'white'
+              ? '#2d3748'
+              : '#ffffff';
 
           return (
             <g
@@ -229,7 +248,7 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
               {building && building.type === 'settlement' && (
                 <polygon
                   points={`${vx},${vy - 9} ${vx + 8},${vy - 3} ${vx + 8},${vy + 7} ${vx - 8},${vy + 7} ${vx - 8},${vy - 3}`}
-                  fill={buildingColor}
+                  fill={playerColor}
                   stroke={strokeColor}
                   strokeWidth={1.5}
                   filter="url(#shadow)"
@@ -240,7 +259,7 @@ export const BoardRenderer: React.FC<BoardRendererProps> = ({
               {building && building.type === 'city' && (
                 <polygon
                   points={`${vx - 10},${vy - 3} ${vx - 5},${vy - 11} ${vx},${vy - 3} ${vx + 10},${vy - 3} ${vx + 10},${vy + 8} ${vx - 10},${vy + 8}`}
-                  fill={buildingColor}
+                  fill={playerColor}
                   stroke={strokeColor}
                   strokeWidth={1.5}
                   filter="url(#shadow)"
